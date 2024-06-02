@@ -1,3 +1,4 @@
+# Importa las bibliotecas necesarias
 import time
 import serial
 import threading
@@ -7,10 +8,10 @@ from plotly.subplots import make_subplots
 from plotly import offline
 import pandas as pd
 
-# Variable global para detener el hilo
+# Variable global para detener los hilos
 stop_thread = False
 
-# Configuración del puerto serial
+# Configura el puerto serial
 ser = serial.Serial(
     port="/dev/ttyUSB0",
     baudrate=115200,
@@ -20,7 +21,26 @@ ser = serial.Serial(
     timeout=1  # Ajusta el puerto y baudrate
 )
 
-# Crear archivo CSV y escribir encabezados
+# Función para leer datos desde el STM32 a través de UART
+def read_data():
+    global stop_thread
+    while not stop_thread:
+        # Leer datos desde STM32 a través de UART
+        data = ser.readline().decode().strip()
+        if data:
+            data_list = data.split(',')
+            try:
+                # Verificar si la cadena puede convertirse a float
+                if data_list[0].lstrip('-').replace('.', '', 1).isdigit():
+                    motor = float(data_list[0])
+                if data_list[1].lstrip('-').replace('.', '', 1).isdigit():
+                    vehicle = float(data_list[1])
+                if data_list[2].lstrip('-').replace('.', '', 1).isdigit():
+                    gear = float(data_list[2])
+            except IndexError:
+                print("Error: no se pudo leer los datos correctamente")
+
+# Crea un archivo CSV y escribe los encabezados
 with open('datos_tractor4.csv', 'w', newline='') as archivo_csv:
     writer = csv.writer(archivo_csv)
     writer.writerow(['Engine Speed', 'Vehicle Speed', 'Gear'])
@@ -63,9 +83,7 @@ def read_data():
                 with open('datos_tractor4.csv', 'a', newline='') as archivo_csv:
                     writer = csv.writer(archivo_csv)
                     writer.writerow([motor, vehicle, gear])
-
                 time.sleep(0.1)
-
             except KeyboardInterrupt:
                 break
     ser.close()
