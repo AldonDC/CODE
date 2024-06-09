@@ -34,7 +34,7 @@ root = tk.Tk()
 root.title("Control del Tractor")
 
 # Crear las etiquetas y los campos de entrada para cada parámetro
-labels = ["Aceleración", "Torque", "Freno", "Direccionales"]
+labels = ["Engine Speed", "Vehicle Speed", "Gear"]
 entries = []
 
 for label in labels:
@@ -76,7 +76,7 @@ def read_data():
                 gear = float(data_list[2])
 
                 # Imprimir los datos en la consola
-                print(f"Velocidad del motor: {motor}, Velocidad del vehículo: {vehicle}, Marcha: {gear}")
+                print(f"Engine Speed: {motor}, Vehicle Speed: {vehicle}, Gear: {gear}")
 
                 # Añadir datos a las listas
                 velocidad_motor.append(motor)
@@ -102,17 +102,17 @@ def inputs():
 # Función para actualizar las gráficas
 def update_plot():
     global stop_thread
-    fig = make_subplots(rows=3, cols=1, subplot_titles=('Velocidad del vehículo', 'Velocidad del motor', 'Marcha'))
+    fig = make_subplots(rows=3, cols=1, subplot_titles=('Vehicle Speed', 'Engine Speed', 'Gear'))
 
-    vehicle_speed_trace = go.Scatter(x=[], y=[], mode='lines', name='Velocidad del vehículo')
-    engine_speed_trace = go.Scatter(x=[], y=[], mode='lines', name='Velocidad del motor')
-    gear_trace = go.Scatter(x=[], y=[], mode='lines', name='Marcha')
+    vehicle_speed_trace = go.Scatter(x=[], y=[], mode='lines', name='Vehicle Speed')
+    engine_speed_trace = go.Scatter(x=[], y=[], mode='lines', name='Engine Speed')
+    gear_trace = go.Scatter(x=[], y=[], mode='lines', name='Gear')
 
     fig.add_trace(vehicle_speed_trace, row=1, col=1)
     fig.add_trace(engine_speed_trace, row=2, col=1)
     fig.add_trace(gear_trace, row=3, col=1)
 
-    fig.update_layout(height=800, width=600, title_text="Datos del Tractor en Tiempo Real")
+    fig.update_layout(height=800, width=600, title_text="Tractor Data in Real Time")
     plot_url = offline.plot(fig, auto_open=False)
 
     while not stop_thread:
