@@ -1,14 +1,11 @@
-# Importa las bibliotecas necesarias
-import time
 import serial
+import time
 import threading
 import csv
-import plotly.graph_objs as go
-from plotly.subplots import make_subplots
-from plotly import offline
-import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import tkinter as tk
-from tkinter import messagebox
 
 # Variable global para detener los hilos
 stop_thread = False
@@ -23,44 +20,46 @@ ser = serial.Serial(
     timeout=1  # Ajusta el puerto y baudrate
 )
 
-# Listas para almacenar los datos en tiempo real
+def send_right():
+    time.sleep(0.5)  # Ajustar el delay según sea necesario
+    ser.write(b'\x01')  # Envía el byte 0x01 para indicar dirección derecha
+
+def send_left():
+    time.sleep(0.5)  # Ajustar el delay según sea necesario
+    ser.write(b'\x03')  # Envía el byte 0x03 para indicar dirección izquierda
+
+def send_stop():
+    time.sleep(0.5)  # Ajustar el delay según sea necesario
+    ser.write(b'\x02')  # Envía el byte 0x02 para indicar freno
+
+# Crear la ventana de la GUI
+window = tk.Tk()
+window.title("Datos del Tractor en Tiempo Real")
+
+# Crear el frame para los botones
+button_frame = tk.Frame(window)
+button_frame.pack()
+
+# Crear los botones para las direcciones
+right_button = tk.Button(button_frame, text="Right", command=send_right, width=10, height=2)
+left_button = tk.Button(button_frame, text="Left", command=send_left, width=10, height=2)
+stop_button = tk.Button(button_frame, text="Brake", command=send_stop, width=10, height=2)
+
+# Añadir los botones al frame
+right_button.grid(row=0, column=0, padx=5, pady=5)
+left_button.grid(row=0, column=1, padx=5, pady=5)
+stop_button.grid(row=0, column=2, padx=5, pady=5)
+
+# Definir las listas
 velocidad_motor = []
 velocidad_vehiculo = []
 marcha = []
 tiempos = []
 
-# Crear la ventana principal
-root = tk.Tk()
-root.title("Control del Tractor")
-
-# Crear las etiquetas y los campos de entrada para cada parámetro
-labels = ["Engine Speed", "Vehicle Speed", "Gear"]
-entries = []
-
-for label in labels:
-    frame = tk.Frame(root)
-    frame.pack()
-
-    label_widget = tk.Label(frame, text=label)
-    label_widget.pack(side=tk.LEFT)
-
-    entry = tk.Entry(frame)
-    entry.pack(side=tk.RIGHT)
-    entries.append(entry)
-
-# Crear una función para manejar el botón de enviar
-def enviar():
-    for i, entry in enumerate(entries):
-        print(f"{labels[i]}: {entry.get()}")
-    
-    # Aquí puedes agregar el código para enviar los datos a la Raspberry Pi
-    # Por ejemplo, podrías usar la biblioteca 'serial' para enviar los datos a través de un puerto serial
-    data_to_send = ",".join([entry.get() for entry in entries])
-    ser.write(data_to_send.encode())
-
-# Crear el botón de enviar
-boton_enviar = tk.Button(root, text="Enviar", command=enviar)
-boton_enviar.pack()
+# Crear un archivo CSV y escribir los encabezados
+with open('datos_tractorFINAL2.csv', 'w', newline='') as archivo_csv:
+    writer = csv.writer(archivo_csv)
+    writer.writerow(['Engine Speed', 'Vehicle Speed', 'Gear'])
 
 # Función para leer datos desde el STM32 a través de UART
 def read_data():
@@ -70,68 +69,67 @@ def read_data():
         data = ser.readline().decode().strip()
         if data:
             data_list = data.split(',')
-            try:
-                motor = float(data_list[0])
-                vehicle = float(data_list[1])
-                gear = float(data_list[2])
+            if len(data_list) == 3:
+                try:
+                    motor = float(data_list[0])
+                    vehicle = float(data_list[1])
+                    gear = int(float(data_list[2]))  # Convertir a float y luego a int
 
-                # Imprimir los datos en la consola
-                print(f"Engine Speed: {motor}, Vehicle Speed: {vehicle}, Gear: {gear}")
+                    # Imprimir los datos en la consola
+                    print(f"Velocidad del motor: {motor}, Velocidad del vehículo: {vehicle}, Marcha: {gear}")
+                    # Añadir datos a las listas
+                    velocidad_motor.append(motor)
+                    velocidad_vehiculo.append(vehicle)
+                    marcha.append(gear)
+                    tiempos.append(len(tiempos) + 1)
 
-                # Añadir datos a las listas
-                velocidad_motor.append(motor)
-                velocidad_vehiculo.append(vehicle)
-                marcha.append(gear)
-                tiempos.append(len(tiempos) + 1)
+                    # Escribir datos en el archivo CSV
+                    with open('datos_tractorFINAL2.csv', 'a', newline='') as archivo_csv:
+                        writer = csv.writer(archivo_csv)
+                        writer.writerow([motor, vehicle, gear])
+                    time.sleep(0.1)
+                except (IndexError, ValueError) as e:
+                    pass  # Ignorar los errores de conversión y formato
+            # else:
+            #     print(f"Error: datos recibidos no tienen el formato esperado: {data_list}")
 
-                # Escribir datos en el archivo CSV
-                with open('datos_tractor4.csv', 'a', newline='') as archivo_csv:
-                    writer = csv.writer(archivo_csv)
-                    writer.writerow(['Engine Speed', 'Vehicle Speed', 'Gear'])
-                time.sleep(0.1)
-            except (IndexError, ValueError):
-                print("Error: no se pudo leer los datos correctamente")
-    ser.close()
+# Función para actualizar las gráficas en tiempo real
+def update_plot(i):
+    ax1.clear()
+    ax2.clear()
+    ax3.clear()
 
-# Función para detener el hilo con la entrada del usuario
-def inputs():
-    global stop_thread
-    input()
-    stop_thread = True
+    ax1.plot(tiempos, velocidad_vehiculo, label="Vehicle Speed", color='blue')
+    ax2.plot(tiempos, velocidad_motor, label="Engine Speed", color='red')
+    ax3.plot(tiempos, marcha, label="Gear", color='green')
 
-# Función para actualizar las gráficas
-def update_plot():
-    global stop_thread
-    fig = make_subplots(rows=3, cols=1, subplot_titles=('Vehicle Speed', 'Engine Speed', 'Gear'))
+    ax1.set_title("Velocidad del vehículo")
+    ax2.set_title("Velocidad del motor")
+    ax3.set_title("Marcha")
 
-    vehicle_speed_trace = go.Scatter(x=[], y=[], mode='lines', name='Vehicle Speed')
-    engine_speed_trace = go.Scatter(x=[], y=[], mode='lines', name='Engine Speed')
-    gear_trace = go.Scatter(x=[], y=[], mode='lines', name='Gear')
+    ax1.legend()
+    ax2.legend()
+    ax3.legend()
 
-    fig.add_trace(vehicle_speed_trace, row=1, col=1)
-    fig.add_trace(engine_speed_trace, row=2, col=1)
-    fig.add_trace(gear_trace, row=3, col=1)
+# Crear la figura y los ejes para matplotlib
+fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 8))
 
-    fig.update_layout(height=800, width=600, title_text="Tractor Data in Real Time")
-    plot_url = offline.plot(fig, auto_open=False)
+# Ajustar el espacio entre las gráficas
+plt.subplots_adjust(hspace=0.5)
 
-    while not stop_thread:
-        fig.data[0].x = tiempos
-        fig.data[0].y = velocidad_vehiculo
-
-        fig.data[1].x = tiempos
-        fig.data[1].y = velocidad_motor
-
-        fig.data[2].x = tiempos
-        fig.data[2].y = marcha
-
-        offline.plot(fig, filename=plot_url, auto_open=False)
-        time.sleep(2)
+# Integrar la figura de matplotlib en tkinter
+canvas = FigureCanvasTkAgg(fig, master=window)
+canvas.get_tk_widget().pack()
 
 # Iniciar los hilos
-threading.Thread(target=inputs).start()
 threading.Thread(target=read_data).start()
-threading.Thread(target=update_plot).start()
 
-# Iniciar el bucle principal de la interfaz gráfica
-root.mainloop()
+# Iniciar la animación de matplotlib
+ani = animation.FuncAnimation(fig, update_plot, interval=1000)
+
+# Iniciar el bucle principal de la GUI en el hilo principal
+window.mainloop()
+
+# Detener los hilos al cerrar la ventana
+stop_thread = True
+ser.close()
